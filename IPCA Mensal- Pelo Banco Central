@@ -1,0 +1,50 @@
+# tabela regreção inflação e taxa de ocupação
+library(sidrar)
+library(tidyverse)
+library(ggplot2)
+library(descr)
+library(dplyr)
+library("jsonlite")
+
+setwd("C:\\Users\\edgar\\OneDrive\\Área de Trabalho\\PUC\\Oitávo - Período\\NEA\\tabelas")
+
+dados_inflacao <- fromJSON("C:\\Users\\edgar\\OneDrive\\Área de Trabalho\\PUC\\Oitávo - Período\\NEA\\tabelas\\inflacao.json")
+
+#C:\Users\edgar\OneDrive\Área de Trabalho\PUC\Oitávo - Período\NEA\tabelas
+
+inflacao_data <- dados_inflacao$value
+inflacao_df <- as.data.frame(inflacao_data)
+
+rm("inflacao_data")
+
+
+IPCA <- inflacao_df %>% 
+  filter(Indicador == "IPCA") %>%
+  filter(Suavizada == "S")
+
+# Criar a base de dados IPCA_mensal com a média mensal
+IPCA_mensal <- IPCA %>%
+  mutate(Mes = format(as.Date(Data), "%Y-%m")) %>% # Extrai o ano e mês da coluna Data
+  group_by(Mes) %>% # Agrupa por ano e mês
+  summarise(Media_Mensal = mean(Media, na.rm = TRUE)) # Calcula a média mensal
+
+# Adicionar coluna "Ano"
+IPCA_anual <- IPCA_mensal %>%
+  mutate(Ano = format(as.Date(paste0(Mes, "-01")), "%Y")) %>% # Extrai apenas o ano
+  group_by(Ano) %>%
+  summarise(Media_Anual = mean(Media_Mensal, na.rm = TRUE)) # Calcula a média anual
+
+# Criar gráfico de linhas com os anos no eixo X
+ggplot(data = IPCA_anual, aes(x = Ano, y = Media_Anual, group = 1)) +
+  geom_line(color = "blue", size = 1) + # Linha azul conectando os pontos
+  geom_point(color = "red", size = 2) + # Pontos vermelhos para cada ano
+  labs(
+    title = "Evolução Anual da Média Mensal do IPCA",
+    x = "Ano",
+    y = "Média Anual do IPCA"
+  ) +
+  theme_minimal() + # Tema limpo
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14), # Centraliza o título
+    axis.text.x = element_text(angle = 45, hjust = 1)  # Inclina os rótulos do eixo X
+  )
