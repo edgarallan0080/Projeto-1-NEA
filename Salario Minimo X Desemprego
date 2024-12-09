@@ -1,0 +1,132 @@
+# graficos
+
+#install.packages("sidrar")
+library(sidrar)
+library(tidyverse)
+library(ggplot2)
+library(descr)
+library(dplyr)
+library(lubridate)
+
+
+setwd("C:\\Users\\edgar\\OneDrive\\Área de Trabalho\\PUC\\Oitávo - Período\\NEA\\graficos")
+
+
+dados_pnad_tri = get_sidra(api = "/t/6468/n1/all/v/all/p/all/d/v4099%201,v4103%201,v9402%201,v9405%201")
+
+dados_api_inflacao = get_sidra(api = "/t/1737/n1/all/v/63,69,2265/p/last%20363/d/v63%202,v69%202,v2265%202")
+
+
+salario_minimo <- read_excel("salario minimo.xlsx")
+
+salario_minimo_tri <- salario_minimo %>%
+  filter(month(data) %in% c(3, 6, 9, 12)) %>% # Filtra meses 3, 6, 9, 12
+  mutate(Trimestre = paste0(year(data), "-", sprintf("%02d", month(data)))) %>% # Cria a coluna "Trimestre"
+  rename(salario = `salario minimo`) # Renomeia a coluna "salario minimo" para "salario"
+
+salario_minimo_tri_12 <- salario_minimo_tri %>%
+  select(salario, Ano, Trimestre) %>%
+  filter(Trimestre >= "2012-03") %>%
+  mutate(
+    Trimestre = case_when(
+      substr(Trimestre, 6, 7) == "03" ~ paste0("1º trimestre ", substr(Trimestre, 1, 4)),
+      substr(Trimestre, 6, 7) == "06" ~ paste0("2º trimestre ", substr(Trimestre, 1, 4)),
+      substr(Trimestre, 6, 7) == "09" ~ paste0("3º trimestre ", substr(Trimestre, 1, 4)),
+      substr(Trimestre, 6, 7) == "12" ~ paste0("4º trimestre ", substr(Trimestre, 1, 4)),
+      TRUE ~ NA_character_ # Para valores que não correspondem
+    )
+  ) %>%
+  slice(-n())
+
+  
+
+#print(dados_pnad_tri[3, 9])
+# resultado : Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade
+
+
+taxa_desocupacao <- dados_pnad_tri %>%
+  filter(Variável == "Taxa de desocupação, na semana de referência, das pessoas de 14 anos ou mais de idade") %>%
+  mutate(Ano = substr(`Trimestre (Código)`, 1, 4)) %>%  
+  select(Valor, Trimestre, Ano)
+
+dados_salario_desocup <- inner_join(salario_minimo_tri_12, taxa_desocupacao, by = "Trimestre") %>% 
+  select( salario, Trimestre ,taxa = `Valor`) %>%
+  mutate(Ano = substr(Trimestre , 14, 17))
+
+
+
+# Criar gráfico de linhas 
+
+
+
+ggplot(data = taxa_desocupacao, aes(x = Ano, y = Valor, group = 1)) +
+  geom_line(color = "blue", size = 1) + # Adiciona a linha
+  geom_point(color = "red", size = 2) + # Adiciona pontos nos anos
+  labs(
+    title = "Evolução da Taxa de Desocupação ao Longo dos Anos",
+    x = "Ano",
+    y = "Taxa de Desocupação (%)"
+  ) +
+  theme_minimal() + # Tema mais limpo
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14), # Centraliza o título
+    axis.text.x = element_text(angle = 45, hjust = 1)  # Inclina os rótulos do eixo X
+  )
+
+
+
+#str(dados_salario_desocup)
+
+ggplot(data = dados_salario_desocup, aes(x = Ano, y = salario, group = 1)) +
+  geom_line(color = "red", size = 1) + # Adiciona uma linha vermelha
+  geom_point(color = "red", size = 2) + # Adiciona pontos para cada observação
+  labs(
+    title = "Evolução do Salario Minimo ao Longo dos Anos",
+    x = "Ano",
+    y = "Salario"
+  ) +
+  theme_minimal() + # Tema limpo
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14), # Centraliza o título
+    axis.text.x = element_text(angle = 45, hjust = 1)  # Inclina os rótulos do eixo X
+  )
+
+
+
+# REGRESSÃO
+
+regressao_salario <- lm(taxa ~ salario, data = dados_salario_desocup)
+
+summary(regressao_salario)
+
+stargazer(regressao_salario, type = "text")
+
+
+
+
+# GRAFICO DE COMPARAÇAO
+
+dados_salario_desocup_perc <- dados_salario_desocup %>%
+  arrange(Ano, Trimestre) %>% # Ordenar os dados por Ano e Trimestre
+  mutate(
+    salario_perc = (salario / lag(salario) - 1) * 100 # Variação percentual em relação ao trimestre anterior
+  ) %>%
+  filter(!is.na(salario_perc))
+
+ggplot(data = dados_salario_desocup_perc, aes(x = Ano)) +
+  geom_line(aes(y = salario_perc, color = "Variação Salário (%)"), size = 1) + # Linha azul para salário percentual
+  geom_line(aes(y = taxa, color = "Taxa de Desocupação (%)"), size = 1) + # Linha vermelha para taxa
+  scale_color_manual(values = c("Variação Salário (%)" = "blue", "Taxa de Desocupação (%)" = "red")) + # Definir cores
+  labs(
+    title = "Evolução da Taxa de Desocupação e Variação Percentual do Salário",
+    x = "Ano",
+    y = "Valores (%)",
+    color = "Legenda"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+)
+
+
