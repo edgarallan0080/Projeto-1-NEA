@@ -1,0 +1,67 @@
+# https://apisidra.ibge.gov.br/values/t/1737/n1/all/v/63,69,2265/p/last%20363/d/v63%202,v69%202,v2265%202
+
+library(stargazer)
+library(readxl)
+library(sidrar)
+library(lubridate)
+library(tidyverse)
+library(ggplot2)
+library(descr)
+library(dplyr)
+
+library(huxtable)
+
+
+setwd("C:\\Users\\edgar\\OneDrive\\Área de Trabalho\\PUC\\Oitávo - Período\\NEA\\tabelas")
+
+salario_minimo <- read_excel("salario minimo.xlsx")
+
+dados_api_inflacao = get_sidra(api = "/t/1737/n1/all/v/63,69,2265/p/last%20363/d/v63%202,v69%202,v2265%202")
+
+taxa_inflacao_acumulada <- dados_api_inflacao %>%
+  filter(Variável == "IPCA - Variação acumulada em 12 meses") %>%
+  mutate(Ano = substr(`Mês (Código)`, 1, 4)) %>%  
+  select(Valor, Mês, Ano)
+
+
+salario_minimo <- salario_minimo %>%
+  mutate(data = as.Date(data)) %>%
+  filter(data >= as.Date("2007-03-01") & data <= as.Date("2024-09-01")) # Filtrar o período
+
+
+
+
+# Taxa de inflação: criar uma coluna "data" a partir do mês e ano
+taxa_inflacao_acumulada <- taxa_inflacao_acumulada %>%
+  mutate(data = as.Date(paste0(Ano, "-", match(str_to_lower(word(Mês, 1)), 
+                                               c("janeiro", "fevereiro", "março", "abril", "maio", "junho", 
+                                                 "julho", "agosto", "setembro", "outubro", "novembro", "dezembro")),
+                               "-01"))) %>%
+  filter(data >= as.Date("2007-03-01") & data <= as.Date("2024-09-01")) # Filtrar o período
+
+
+
+# 2. Unir as tabelas pelo campo "data"
+dados_regressao <- inner_join(salario_minimo, taxa_inflacao_acumulada, by = "data") %>% 
+  select(data, salario = `salario minimo`, Valor)
+
+str(dados_regressao)
+
+regressao <- lm(Valor ~ salario, data = dados_regressao)
+
+summary(regressao)
+
+stargazer(regressao, type = "text")
+
+ggplot(dados_regressao, aes(x = Valor, y = salario)) +
+  geom_point(color = "blue") + # Pontos para os dados reais
+  geom_smooth(method = "lm", color = "red", se = FALSE) + # Linha de regressão
+  labs(
+    title = "Relação entre Inflação (IPCA) e Salário Mínimo (2003-2024)",
+    x = "Inflação Acumulada (IPCA - %)",
+    y = "Salário Mínimo (R$)"
+  ) +
+  theme_minimal()
+
+
+
