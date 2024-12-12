@@ -7,9 +7,8 @@ library(ggplot2)
 library(descr)
 library(dplyr)
 library(lubridate)
-
-
-setwd("C:\\Users\\edgar\\OneDrive\\Área de Trabalho\\PUC\\Oitávo - Período\\NEA\\graficos")
+library(readxl)
+library(stargazer)
 
 
 dados_pnad_tri = get_sidra(api = "/t/6468/n1/all/v/all/p/all/d/v4099%201,v4103%201,v9402%201,v9405%201")
@@ -59,13 +58,34 @@ dados_salario_desocup <- inner_join(salario_minimo_tri_12, taxa_desocupacao, by 
 
 
 
+# Adicionar uma coluna para identificar os trimestres
+taxa_desocupacao <- taxa_desocupacao %>%
+  mutate(
+    Trimestre_Cor = case_when(
+      grepl("1º trimestre", Trimestre) ~ "1º Trimestre",
+      grepl("2º trimestre", Trimestre) ~ "2º Trimestre",
+      grepl("3º trimestre", Trimestre) ~ "3º Trimestre",
+      grepl("4º trimestre", Trimestre) ~ "4º Trimestre"
+    )
+  )
+
+# Criar o gráfico
 ggplot(data = taxa_desocupacao, aes(x = Ano, y = Valor, group = 1)) +
-  geom_line(color = "blue", size = 1) + # Adiciona a linha
-  geom_point(color = "red", size = 2) + # Adiciona pontos nos anos
+  geom_line(color = "blue", size = 1) + # Linha azul conectando os pontos
+  geom_point(aes(color = Trimestre_Cor), size = 2) + # Pontos coloridos por trimestre
+  scale_color_manual(
+    values = c(
+      "1º Trimestre" = "red",
+      "2º Trimestre" = "green",
+      "3º Trimestre" = "yellow",
+      "4º Trimestre" = "pink"
+    )
+  ) + # Define as cores dos trimestres
   labs(
     title = "Evolução da Taxa de Desocupação ao Longo dos Anos",
     x = "Ano",
-    y = "Taxa de Desocupação (%)"
+    y = "Taxa de Desocupação (%)",
+    color = "Trimestre"
   ) +
   theme_minimal() + # Tema mais limpo
   theme(
@@ -95,7 +115,7 @@ ggplot(data = dados_salario_desocup, aes(x = Ano, y = salario, group = 1)) +
 
 # REGRESSÃO
 
-regressao_salario <- lm(taxa ~ salario, data = dados_salario_desocup)
+regressao_salario <- lm(log(taxa) ~ log(salario), data = dados_salario_desocup)
 
 summary(regressao_salario)
 
@@ -118,7 +138,7 @@ ggplot(data = dados_salario_desocup_perc, aes(x = Ano)) +
   geom_line(aes(y = taxa, color = "Taxa de Desocupação (%)"), size = 1) + # Linha vermelha para taxa
   scale_color_manual(values = c("Variação Salário (%)" = "blue", "Taxa de Desocupação (%)" = "red")) + # Definir cores
   labs(
-    title = "Evolução da Taxa de Desocupação e Variação Percentual do Salário",
+    title = "Taxa de Desocupação X Variação do Salário-Minimo",
     x = "Ano",
     y = "Valores (%)",
     color = "Legenda"
@@ -128,5 +148,10 @@ ggplot(data = dados_salario_desocup_perc, aes(x = Ano)) +
     plot.title = element_text(hjust = 0.5, size = 14),
     axis.text.x = element_text(angle = 45, hjust = 1)
 )
+
+
+
+
+
 
 
